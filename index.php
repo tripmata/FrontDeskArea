@@ -11,8 +11,25 @@
 	$path = "";
 	$request = null;
 
+	// allow origin
+	header('Access-Control-Allow-Origin: *');
+
 	// get url configuration
 	$urlConfiguration = Configuration::url();
+
+	// check for token
+    if (isset($_REQUEST['handshake']))
+    {
+        // get token data
+        $token = json_decode(base64_decode($_REQUEST['handshake']));
+
+        // are we good ??
+        if (is_object($token))
+        {
+            $_REQUEST['usersess'] = $token->usersess;
+            $_REQUEST['property'] = $token->property;
+        }
+    }
 
 	if (isset($_SERVER['PATH_INFO'])) 
 	{
@@ -25,40 +42,10 @@
 		echo "{\"status\":\"success\"}";
 		exit();
 	}
-
-	if (strtolower(trim($router->Page)) == "mail") {
-
-        if ((isset($_REQUEST['userkey'])) && (isset($_REQUEST['intent'])))
-		{
-            if ($_REQUEST['userkey'] == Serializer::GetKey()) 
-			{
-                if ($_REQUEST['intent'] == "send-mail") 
-				{
-					$mail = Mail::MapRequest();
-					
-                    if ($mail !== null) {echo Mail::Send($mail);}
-                }
-                else 
-				{
-                    echo "{\"status\":\"available\"}";
-                }
-            }
-            else 
-			{
-                echo "{\"status\":\"failed\",\"message\":\"invalid-user-key\"}";
-            }
-        }
-        else 
-		{
-            echo "{\"status\":\"failed\",\"message\":\"invalid-parameters-passed\"}";
-		}
-		
-        exit();
-	}
 	
-	if(count($router->Args) > 0) 
+	if (count($router->Args) > 0) 
 	{
-		if($router->Args[(count($router->Args) - 1)] == "logout") 
+		if ($router->Args[(count($router->Args) - 1)] == "logout") 
 		{
 			session_destroy();
 			echo "{\"status\":\"success\"}";
@@ -69,7 +56,7 @@
 		{
 			$request = new Request($urlConfiguration->worker);
 		}
-		elseif($router->Args[(count($router->Args) - 1)] == "upload") 
+		elseif ($router->Args[(count($router->Args) - 1)] == "upload") 
 		{
 			$upload = new Upload($_FILES['file']);
 			
@@ -106,30 +93,33 @@
 		$request->AddRange(Serializer::SerializeSession());
 		$response = $request->Execute();
 		
-		if($response->GetFormat() == "text") 
+		if ($response->GetFormat() == "text") 
 		{
 			echo $response->Content;
 		}
 		else 
 		{
-			if($response->Type == "page") 
+			if ($response->Type == "page") 
 			{
 				print_r($response->Content);
 			}
-			else if($response->Type == "set") 
+			else if ($response->Type == "set") 
 			{
-				if($response->Content->Data->setMethod == "session") 
+				if ($response->Content->Data->setMethod == "session") 
 				{
 					$_SESSION[$response->Content->Data->setName] = $response->Content->Data->setValue;
 				}
-				else if($response->Content->Data->setMethod == "cookie") 
+				elseif ($response->Content->Data->setMethod == "cookie") 
 				{
 					$_COOKIE[$response->Content->Data->setName] = $response->Content->Data->setValue;
 					setcookie($response->Content->Data->setName, $response->Content->Data->setValue, (3600 * 50), "..");
 				}
+
 				$response->Content->Data->setName = "";
 				$response->Content->Data->setValue = "";
+				 
 				echo json_encode($response->Content);
+
 			}
 			else 
 			{

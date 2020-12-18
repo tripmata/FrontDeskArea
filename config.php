@@ -11,7 +11,7 @@ class Configuration
      * @var string $mode 
      * Can either be development or live
      */
-    const MODE = 'development';
+    const MODE = 'live';
 
     /**
      * @method Configuration url
@@ -34,10 +34,10 @@ class Configuration
 
             // live url configuration
             'live' => [
-                'worker'    => '',
-                'page'      => '',
-                'storage'   => '',
-                'host'      => ''
+                'worker'    => 'http://services.tripmata.net/FrontDeskServices/worker.php',
+                'page'      => 'http://services.tripmata.net/FrontDeskServices/page.php',
+                'storage'   => 'http://cdn.tripmata.net/frontdesk/',
+                'host'      => 'http://frontdesk.tripmata.net/'
             ]
         ];
 

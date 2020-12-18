@@ -71,7 +71,7 @@
                 curl_setopt($curl, CURLOPT_HTTPHEADER, [
                     'x-url-config:' . json_encode([
                         'storage' => $urlConfiguration->storage,
-                        'host'    => $urlConfiguration->host
+                        'host'    => $urlConfiguration->host,
                     ])
                 ]);
 

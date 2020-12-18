@@ -10,9 +10,3 @@
    require_once ("classes/Request.php");
    require_once ("classes/Router.php");
    require_once ("classes/Upload.php");
-   require_once ("classes/Mail.php");
-
-    //Load PHP mailer
-    require_once ("phpmailer/src/PHPMailer.php");
-    require_once ("phpmailer/src/Exception.php");
-    require_once ("phpmailer/src/SMTP.php");
