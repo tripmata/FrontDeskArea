@@ -11,7 +11,12 @@ class Configuration
      * @var string $mode 
      * Can either be development or live
      */
-    const MODE = 'live';
+    const MODE = 'development';
+
+    /**
+     * @var string $host
+     */
+    const HOST = 'localhost';
 
     /**
      * @method Configuration url
@@ -54,8 +59,14 @@ class Configuration
      */
     private static function getObject(array $config) : object 
     {
+        // get mode
+        $mode = Configuration::MODE;
+
+        // read http_host
+        if (isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], self::HOST) === false) $mode = 'live';
+
         // return configuration as an object
-        return (object) (isset($config[Configuration::MODE]) ? $config[Configuration::MODE] : $config['development']);
+        return (object) (isset($config[$mode]) ? $config[$mode] : $config['development']);
     }
 
     /**

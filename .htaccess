@@ -4,7 +4,9 @@ RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 
 <IfModule mod_headers.c>
-    Header set Access-Control-Allow-Origin "http://cdn.tripmata.net"
+    Header set Access-Control-Allow-Origin "*"
+    Header set Vary "Origin"
+    Header set Access-Control-Allow-Headers "x-requested-with"
 </IfModule>
 
 

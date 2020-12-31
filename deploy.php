@@ -29,7 +29,7 @@ class DeployProject
     public $requestHeader = 'X-Deploy-ID';
 
     // @var $options
-    private $options = ['deploy', 'rollback', 'getall'];
+    private $options = ['deploy', 'rollback', 'getall', 'pull'];
 
     // @var $uploadName
     public $uploadName = 'deployZip';
@@ -336,8 +336,148 @@ class DeployProject
                         self::out('Invalid Remote Address ('.$address.')');
                     }
 
-                    break;
+                break;
+                // pull 
+                case 'pull':
 
+                    self::out("Full from Production server\n");
+
+                    // load files
+                    $files = [];
+
+                    // get configuration.
+                    $address = strlen($instance->remote_address) > 4 ? $instance->remote_address : null;
+                    $requestID = $instance->requestID;
+                    $requestHeader = $instance->requestHeader;
+
+                    // check options
+                    if (count($options) > 0)
+                    {
+                        foreach($options as $index => $val)
+                        {
+                            if (substr($val, 0, 1) == '-')
+                            {
+                                // convert to array
+                                $dirArray = explode(',', $val);
+
+                                // loop through
+                                foreach ($dirArray as $i  => $dr)
+                                {
+                                    // save file
+                                    $files[] = trim(ltrim($dr, '-'));
+                                }
+                            }
+                        }
+                    }
+
+                    // authenticate
+                    self::out("[POST]"." Authenticating with Remote Server\n");
+
+                    if (filter_var($address, FILTER_VALIDATE_URL))
+                    {
+                        $url = rtrim($address, 'deploy.php');
+                        $url = rtrim($url, '/') . '/deploy.php?mode=pull';
+                        $msg = '';
+                        $newFile = __DIR__ . '/pull-file.zip';
+
+                        // create file handle
+                        $fh = fopen($newFile, 'w+');
+
+
+                        $parse = parse_url($url);
+                        $host = $parse['host'];
+
+                        $agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:68.0) Gecko/20100101 Firefox/68.0';
+
+                        $ch = curl_init();
+                        curl_setopt($ch, CURLOPT_URL, $url);
+                        curl_setopt($ch, CURLOPT_POST, 1);
+                        curl_setopt($ch, CURLOPT_FILE, $fh);
+                        curl_setopt($ch, CURLOPT_HEADER, 0);
+                        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+                        curl_setopt($ch, CURLOPT_USERAGENT, $agent);
+                        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: multipart/form-data',
+                            "{$instance->requestHeader}: {$instance->requestID}",
+                            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                            'Accept-Language: en-US,en;q=0.5',
+                            'Cache-Control: max-age=0',
+                            'Connection: keep-alive',
+                            'Host: '.$host,
+                            'Upgrade-Insecure-Requests: 1',
+                            'User-Agent: '.$agent));
+                        curl_setopt($ch, CURLOPT_TIMEOUT, 86400);
+                        curl_setopt($ch, CURLOPT_POSTFIELDS, [
+                            'files' => json_encode(['files' => $files]),
+                            'option' => 'pull'
+                        ]);
+
+                        $run = curl_exec($ch);
+
+                        if (curl_errno($ch))
+                        {
+                            $msg = curl_error($ch);
+                        }
+
+                        $st_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+                        // write file
+                        fwrite($fh, $run);
+
+                        // close curl
+                        curl_close($ch);
+
+                        // close file handle
+                        fclose($fh);
+
+                        if ($st_code === 200)
+                        {
+                            // read file
+                            // create zip instance
+                            $zip = new \ZipArchive();
+
+                            // does file exists
+                            if (file_exists($newFile))
+                            {
+                                // get size
+                                $filesize = $instance->convertToReadableSize(filesize($newFile));
+
+                                // status
+                                self::sleep("[ZIP] Extracting ($filesize)..\n");
+
+                                // open file
+                                if ($zip->open($newFile) === true)
+                                {
+                                    $zip->extractTo(__ROOT__);
+                                    // close now
+                                    $zip->close();
+                                }
+
+                                // wait for it
+                                sleep(1);
+
+                                // delete file
+                                if (file_exists($newFile)) unlink($newFile);
+
+                                // all good
+                                self::out('Pull operation complete.');
+                            }
+                            else
+                            {
+                                self::out('Could not find > ' . $newFile);
+                            }
+                        }
+                        else
+                        {
+                            self::out("Error pulling content. Message: {$msg}, Body: {$run}");
+                        }
+
+                    }
+                    else
+                    {
+                        self::out("Invalid Remote Address '{$address}/'");
+                    }
+
+                break;
                 // rollback
                 case 'rollback':
 
@@ -936,6 +1076,117 @@ class DeployProject
         }
 
         $this->failed("No file with {$this->uploadName} to deploy.");
+    }
+
+    // pull option
+    private function pull()
+    {
+        if (isset($_POST['files'])) :
+
+            // read file
+            $file = json_decode($_POST['files']);
+
+            // are we good ?
+            if (is_object($file)) 
+            {
+                // get files
+                $files = $file->files;
+
+                // create zip instance
+                $zip = new \ZipArchive();
+
+                // create zip file 
+                $zipfile = __ROOT__ . '/pull-'.time().'.zip';
+
+                // do we have all to back up?
+                if (count($files) == 0)
+                {
+                    // do all
+                    if ($zip->open($zipfile, ZipArchive::CREATE) === true)
+                    {
+                        $data = glob(__ROOT__ .'/{,.}*', GLOB_BRACE);
+
+                        foreach ($data as $i => $f)
+                        {
+                            if (basename($f) != '.' && basename($f) != '..')
+                            {
+                                if (is_file($f) && basename($f) != 'deploy.php')
+                                {
+                                    $zip->addFile($f);
+                                }
+                                elseif (is_dir($f) && (basename($f) != 'deploy' && basename($f) != 'deploy-track'))
+                                {
+                                    $dr = $this->getAllFiles($f);
+
+                                    $single = $this->reduce_array($dr);
+
+                                    if (count($single) > 0)
+                                    {
+                                        foreach ($single as $z => $d)
+                                        {
+                                            $zip->addFile($d);
+                                        }
+                                    }
+
+                                }
+                            }
+                        }
+
+                        $zip->close();
+                    }
+                }
+                else
+                {
+                    if ($zip->open($zipfile, \ZipArchive::CREATE) === true)
+                    {
+                        // fetch single
+                        foreach ($files as $filePath)
+                        {
+                            // check if file exists and add
+                            if (file_exists(__ROOT__ . '/' . $filePath))
+                            {
+                                $zip->addFile(__ROOT__ . '/' . $filePath);
+                            }
+                        }
+
+                        // close file
+                        $zip->close();
+                    }
+                }
+
+                // does file exists
+                if (file_exists($zipfile))
+                {
+                    $mime = mime_content_type($zipfile);
+
+                    // trigger download
+                    header('Content-Type: '.$mime);
+                    header('Content-Disposition: attachment; filename='.basename($zipfile));
+                    header('Cache-Control: no-cache');
+                    header('Connection: keep-alive');
+                    header('Content-Length: '.filesize($zipfile));
+                    readfile($zipfile);
+                    flush();
+
+                    // delete file
+                    unlink($zipfile);
+                    exit;
+                }
+
+                // failed
+                echo "Operation ended with exit code 0. ZipArchive failed.";
+
+                // good
+                return false;
+            }
+
+            // failed
+            echo "Invalid file type";
+
+        endif;
+
+        // noting found
+        echo "Missing files POST param";
     }
 
     // rollback option
